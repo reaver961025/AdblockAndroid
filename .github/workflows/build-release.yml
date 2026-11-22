@@ -15,6 +15,9 @@ jobs:
   build:
     name: Build AAR / APK
     runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,16 +29,21 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Set up Android SDK (root + licenses)
-        uses: android-actions/setup-android@v3
-        with:
-          accept-android-sdk-licenses: true
-
-      - name: Install platform/build-tools/NDK/CMake
+      # ubuntu-latest ships the Android SDK at /usr/local/lib/android/sdk with
+      # sdkmanager already available. We accept licenses non-interactively and
+      # install the exact platform / build-tools / NDK / CMake we pin in the
+      # build files (avoids the buggy setup-android@v3 license handling).
+      - name: Configure Android SDK (licenses + platform/build-tools/NDK/CMake)
         run: |
           set -e
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/cmdline-tools/16.0/bin:$PATH"
+          echo "sdkmanager: $(command -v sdkmanager)"
+          yes | sdkmanager --licenses > /tmp/licenses.log 2>&1 || true
+          echo "--- license acceptance tail ---"
+          tail -n 4 /tmp/licenses.log || true
           sdkmanager --install \
+            "platform-tools" \
             "platforms;android-34" \
             "build-tools;34.0.0" \
             "ndk;26.3.11579264" \
