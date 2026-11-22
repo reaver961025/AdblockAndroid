@@ -1,8 +1,17 @@
 # AdblockAndroid
 
-[![](https://jitpack.io/v/Edsuns/AdblockAndroid.svg)](https://jitpack.io/#Edsuns/AdblockAndroid)
+[![](https://jitpack.io/v/reaver961025/AdblockAndroid.svg)](https://jitpack.io/#reaver961025/AdblockAndroid)
 
 *English | [简体中文](README.zh-cn.md)*
+
+> **Fork update (2026-11):** this fork of `Edsuns/AdblockAndroid` modernizes the
+> build toolchain — Gradle **8.7**, Android Gradle Plugin **8.5.2**, Kotlin
+> **1.9.24**, `compileSdk`/`targetSdk` **34** — replaces the defunct `jcenter()`
+> repository with `mavenCentral()`, drops the unused deprecated **Anko**
+> dependencies, frees the pinned CMake `3.10.2`, and bumps every AndroidX /
+> Kotlinx library. Build it with **JDK 17+** and a recent Android Studio with the
+> NDK + CMake components installed. See [CHANGELOG-update.md](CHANGELOG-update.md)
+> for the full list of changes and remaining verification steps.
 
 A lightweight and efficient adblock engine library for Android, which has strong compatibility for filters like [EasyList](https://easylist.to/) and [AdGuard Filters](https://kb.adguard.com/en/general/how-to-create-your-own-ad-filters).
 
@@ -55,7 +64,7 @@ Add the dependency:
 
 ```groovy
 dependencies {
-    implementation 'com.github.Edsuns.AdblockAndroid:ad-filter:1.0'
+    implementation 'com.github.reaver961025.AdblockAndroid:ad-filter:2.0.0'
 }
 ```
 
