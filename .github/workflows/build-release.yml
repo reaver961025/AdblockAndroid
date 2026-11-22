@@ -15,9 +15,6 @@ jobs:
   build:
     name: Build AAR / APK
     runs-on: ubuntu-latest
-    env:
-      NDK_VERSION: "26.3.11579264"
-      CMAKE_VERSION: "3.22.1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,14 +26,20 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Set up Android SDK + NDK + CMake
+      - name: Set up Android SDK (root + licenses)
         uses: android-actions/setup-android@v3
         with:
-          packages: |
-            platforms;android-34
-            build-tools;34.0.0
-            ndk;26.3.11579264
-            cmake;3.22.1
+          accept-android-sdk-licenses: true
+
+      - name: Install platform/build-tools/NDK/CMake
+        run: |
+          set -e
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager --install \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "ndk;26.3.11579264" \
+            "cmake;3.22.1"
 
       - name: Make gradlew executable
         run: chmod +x gradlew
