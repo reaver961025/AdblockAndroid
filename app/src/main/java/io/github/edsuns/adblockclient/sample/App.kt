@@ -42,7 +42,9 @@ class App : Application() {
         val intent = Intent(this, clazz).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
-        val pendingIntent = PendingIntent.getActivity(this, 0, intent, 0)
+        // FLAG_IMMUTABLE is required on API 31+ (IllegalArgumentException otherwise);
+        // minSdk is 23 so the constant is always available.
+        val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
 
         val builder = NotificationCompat.Builder(this, channelId).apply {
             setContentTitle(getString(R.string.filter_download))

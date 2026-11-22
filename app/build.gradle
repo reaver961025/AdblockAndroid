@@ -69,30 +69,23 @@ android {
     }
 }
 
-ext {
-    timber = "5.0.1"
-}
-
 dependencies {
     implementation fileTree(dir: "libs", include: ["*.jar"])
     implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
-    implementation 'androidx.core:core-ktx:1.13.1'
-    implementation 'androidx.appcompat:appcompat:1.7.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
+    implementation libs.bundles.androidx.base
+    implementation libs.androidx.constraintlayout
+    testImplementation libs.bundles.test.base
+    androidTestImplementation libs.bundles.androidtest.base
 
-    // KTX extensions
-    // e.g. viewModels()
-    implementation "androidx.activity:activity-ktx:1.9.2"
-    implementation "androidx.fragment:fragment-ktx:1.8.4"
+    // KTX extensions, e.g. viewModels()
+    implementation libs.androidx.activity.ktx
+    implementation libs.androidx.fragment.ktx
 
     implementation(project(':ad-filter'))
 
-    implementation "com.jakewharton.timber:timber:$timber"
+    implementation libs.timber
 
-    implementation 'com.google.android.material:material:1.12.0'
+    implementation libs.google.material
 
-    implementation 'com.github.Edsuns:SmoothProgressAnimator:1.0'
+    implementation libs.edsuns.smoothprogress
 }

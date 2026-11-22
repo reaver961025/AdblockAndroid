@@ -17,7 +17,8 @@ Kotlin 1.4.21 / `compileSdk` 30 / `jcenter()`).
 | `compileSdk` / `targetSdk` | 30 | **34** |
 | `minSdk` | 23 | 23 (unchanged) |
 | `buildToolsVersion` | `"29.0.3"` (pinned) | removed — AGP 8 selects its own |
-| CMake | pinned `"3.10.2"` (no longer downloadable) | unpinned — AGP 8 uses its bundled/default CMake |
+| CMake | pinned `"3.10.2"` (no longer downloadable) | pinned `"3.22.1"` (SDK-installed, reproducible) |
+| NDK | (unpinned) | pinned `"26.3.11579264"` (r26d, reproducible) |
 
 AGP 8 disables `BuildConfig` generation by default for libraries. Because the
 source references `BuildConfig.DEBUG` (`ad-filter/.../ScriptInjection.kt` and
@@ -33,6 +34,17 @@ were renamed to the AGP 8 DSL `compileSdk` / `minSdk` / `targetSdk`.
 the `buildscript` and `allprojects` repository lists in the root `build.gradle`.
 Replaced with `mavenCentral()`. `google()` and the `jitpack.io` maven repo are
 kept.
+
+## Version catalog
+
+A Gradle version catalog was introduced at `gradle/libs.versions.toml`,
+centralizing every dependency version. The three module `build.gradle` files
+now reference dependencies via `libs.<alias>` / `libs.bundles.<alias>` instead
+of inline coordinates. Plugin versions (AGP / Kotlin / serialization / kapt)
+are still applied through the root `buildscript { classpath }` + `apply plugin`
+style (a migration to the `plugins {}` DSL is left as a follow-up). A local
+script (`scripts/verify_catalog.py`) confirms every `libs.*` accessor used in
+the build files is defined in the catalog.
 
 ## Dependencies
 
@@ -63,6 +75,78 @@ Kept as-is (only available versions, hosted on jitpack):
 - `com.github.Edsuns.Mezzanine:mezzanine:1.2.1` (+ `mezzanine-compiler` kapt)
 - `com.github.Edsuns:SmoothProgressAnimator:1.0`
 
+## NDK / CMake pinning
+
+`adblock-client/build.gradle` now pins `ndkVersion = "26.3.11579264"` (NDK r26d)
+and CMake `version = "3.22.1"` so native builds are reproducible and match what
+CI installs. The CMake `3.10.2` pin from upstream is gone (it is no longer
+downloadable from the SDK manager). The four shipped ABIs
+(`armeabi-v7a`, `arm64-v8a`, `x86`, `x86_64`) are declared as `abiFilters`.
+
+## Code audit
+
+A full read-only audit of the Kotlin source + the first-party JNI bridge
+(`adblockclient-lib.cpp`) was performed. **No build-breakers** were found under
+the target toolchain — the project compiles (with deprecation warnings). The
+following real issues were **fixed** in this pass:
+
+- `app/.../App.kt` — `PendingIntent.getActivity(..., 0)` now passes
+  `FLAG_IMMUTABLE` (hard crash on API 31+ without it; minSdk 23 guarantees the
+  constant exists).
+- `app/.../main/MainViewModel.kt` — the per-request blocking-stats map was a
+  plain `HashMap` mutated from the WebView background interceptor thread while
+  the Main thread reads/clears it → `ConcurrentModificationException` and lost
+  counters. Now a `ConcurrentHashMap` with all mutations serialized on a lock,
+  and observers receive a shallow copy via `postValue`.
+- `app/.../main/WebClient.kt` — force-unwraps (`view!!` / `request!!`) replaced
+  with null-guards (WebView can pass null during teardown).
+- `app/.../main/MainActivity.kt` — added `onDestroy()` that `removeAllViews()` +
+  `destroy()`s the WebView so the Activity is not leaked through AdFilter
+  callbacks.
+- `app/.../URLUtilities.kt` — `Patterns.WEB_URL` (deprecated API 31) →
+  `androidx.core.util.PatternsCompat.WEB_URL`.
+- `app/.../settings/FilterListAdapter.kt` — `adapterPosition` (deprecated) →
+  `bindingAdapterPosition`, guarded against `NO_POSITION`.
+- `ad-filter/.../impl/CustomFilterImpl.kt` — `toByteArray()` now explicit
+  `Charsets.UTF_8` (the JNI side expects UTF-8).
+- `adblock-client/.../adblockclient-lib.cpp` — guarded `NewStringUTF(nullptr)`
+  in `matches()`; on the common non-blocked path both rule pointers are null and
+  `NewStringUTF(nullptr)` can abort ART.
+
+**Deferred (identified, not fixed — require API/architectural changes that can't
+be safely verified without a device):**
+- `AdFilterImpl.shouldIntercept()` uses `runBlocking` + `withContext(Dispatchers.Main)`
+  to read `webView.url`, blocking the WebView interceptor thread and serializing
+  every resource through Main. Proper fix: cache the document URL on
+  `onPageStarted`/`onPageFinished` into a `@Volatile` field. (core library)
+- `FilterViewModelImpl.init` calls `workManager.getWorkInfosForUniqueWork(id).get()`
+  on the Main thread during `App.onCreate` → ANR risk on cold start. Move to a
+  coroutine on `Dispatchers.IO`. (core library)
+- `AdBlockClient` relies on `finalize()` to release native buffers (finalize is
+  deprecated, non-deterministic) and `loadBasicData`/`loadProcessedData` overwrite
+  the prior buffer without freeing it. Migrate to an explicit `AutoCloseable`/
+  `release()` and free-before-reassign. (core library, native memory)
+- `RuleIterator.hasNext()/size()` mishandle a trailing non-newline-terminated
+  segment (can yield a spurious empty rule); fixing changes iterator semantics
+  and must be validated against `RuleIteratorTest`.
+- `adblockclient-lib.cpp` `loadBasicData` passes a non-NUL-terminated buffer to
+  `parse()` — flagged as a possible over-read, needs verification against the
+  vendored `third-party/ad-block` `parse()` signature.
+- Deprecations left as warnings: `onBackPressed`, `systemUiVisibility`/
+  `SYSTEM_UI_FLAG_*` (Fullscreen), `notifyDataSetChanged()` (DiffUtil preferred),
+  Java-style `observe(owner, { })` lambdas.
+
+## CI / release pipeline
+
+A GitHub Actions workflow (`.github/workflows/build-release.yml`) builds the
+library on `ubuntu-latest` with JDK 17 + Android SDK + NDK r26d + CMake 3.22.1:
+- Runs `:adblock-client:assembleRelease :ad-filter:assembleRelease` (produces
+  the two `.aar` files) and, best-effort (`continue-on-error`), `:app:assembleDebug`.
+- Uploads the AARs (+ universal APK if built) as a workflow artifact on every run.
+- On a `v*` tag push, creates a GitHub Release (`softprops/action-gh-release`)
+  with `ad-filter-release.aar`, `adblock-client-release.aar` and the sample APK
+  attached, plus auto-generated release notes.
+
 ## Versioning
 
 App and library modules bumped from `versionCode 1` / `versionName "1.0"` to
@@ -77,25 +161,25 @@ App and library modules bumped from `versionCode 1` / `versionName "1.0"` to
 
 ## Verification status
 
-- The Gradle wrapper was upgraded to 8.7 and confirmed to launch under JDK 21
-  (`./gradlew --version`) — i.e. the wrapper itself is valid.
-- **A full build could NOT be run in the sandbox** because the Android SDK,
-  NDK and CMake are not installed here. The configuration changes are
-  syntactically coherent for AGP 8.5.2, but compilation must be verified on a
-  machine with Android Studio (recent Canary/Beta or stable 2024+), JDK 17+,
-  and the NDK + CMake components.
+- Gradle wrapper 8.7 launches under JDK 21 (`./gradlew --version`).
+- Version catalog `libs.versions.toml` parses (Python `tomllib`) and every
+  `libs.*` accessor used in the build files is defined (`scripts/verify_catalog.py`).
+- A source + JNI audit found **no build-breakers** under the target toolchain.
+- **A full build could NOT be run in the sandbox**: no Android SDK/NDK/CMake, and
+  Maven Central rate-limits (HTTP 429) the sandbox IP during AGP classpath
+  resolution. Compilation is instead verified in GitHub Actions (see CI section),
+  which runs on a runner with the SDK/NDK/CMake and no rate limit.
 
 ## Remaining steps (to do)
 
-1. Open the project in Android Studio and let it sync. Install the NDK + CMake
-   via the SDK Manager if prompted.
-2. Run `./gradlew :app:assembleDebug` and resolve any remaining source-level
-   deprecations AGP 8 surfaces (e.g. the `kotlinOptions` DSL is deprecated in
-   favor of the `kotlin { compilerOptions { } }` block — still functional in
-   Kotlin 1.9.24, can be migrated later).
-3. The three jitpack-hosted `Edsuns:*` libraries are old; if they fail to
-   resolve or pull in legacy support-library transitive deps, consider
-   vendoring/replacing them. `android.enableJetifier=true` is kept in
-   `gradle.properties` as a safety net for any transitive legacy deps.
-4. Tag `v2.0.0` on `master` once the build is green so JitPack can publish
-   `com.github.reaver961025.AdblockAndroid:ad-filter:2.0.0`.
+1. Push `update/modernize-toolchain`, trigger the workflow via `workflow_dispatch`
+   and iterate until the AAR build is green.
+2. Fast-forward `master` (fork only) to the green branch and tag `v2.0.0` — the
+   workflow then publishes the `.aar` files to a GitHub Release.
+3. Address the deferred audit items (the two ANR risks in the core library and
+   the `AdBlockClient` native-memory lifecycle) — these need device/emulator
+   validation.
+4. Optional: migrate plugins to the `plugins {}` DSL (`pluginManagement` in
+   `settings.gradle`) and move `kotlinOptions` to the `kotlin { compilerOptions }`
+   block; replace the old jitpack `Edsuns:*` libs if they cause issues.
+   `android.enableJetifier=true` is kept as a safety net for transitive legacy deps.

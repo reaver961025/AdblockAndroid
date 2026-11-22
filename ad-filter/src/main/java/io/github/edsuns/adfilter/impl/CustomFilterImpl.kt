@@ -14,7 +14,9 @@ internal class CustomFilterImpl constructor(
     override fun flush() {
         val blacklistStr = dataBuilder.toString()
         if (blacklistStr.isNotBlank()) {
-            val rawData = blacklistStr.toByteArray()
+            // The JNI side (AdBlockClient) expects UTF-8 bytes; be explicit instead
+            // of relying on the platform default charset.
+            val rawData = blacklistStr.toByteArray(Charsets.UTF_8)
             filterDataLoader.loadCustomFilter(rawData)
         }
     }

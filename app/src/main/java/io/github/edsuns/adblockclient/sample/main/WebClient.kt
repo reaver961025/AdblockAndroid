@@ -12,7 +12,7 @@ class WebClient(private val webViewClientListener: WebViewClientListener) : WebV
     private val filter = AdFilter.get()
 
     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-        val url = request!!.url.toString()
+        val url = request?.url?.toString() ?: return false
         return !URLUtil.isNetworkUrl(url)
     }
 
@@ -20,7 +20,12 @@ class WebClient(private val webViewClientListener: WebViewClientListener) : WebV
         view: WebView?,
         request: WebResourceRequest?
     ): WebResourceResponse? {
-        val result = filter.shouldIntercept(view!!, request!!)
+        // WebView can invoke these callbacks with a null view/request during
+        // teardown; bail out instead of force-unwrapping and NPE'ing.
+        if (view == null || request == null) {
+            return null
+        }
+        val result = filter.shouldIntercept(view, request)
         webViewClientListener.onShouldInterceptRequest(result)
         return result.resourceResponse
     }

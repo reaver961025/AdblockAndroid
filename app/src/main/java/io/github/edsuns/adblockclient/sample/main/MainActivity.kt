@@ -198,6 +198,16 @@ class MainActivity : AppCompatActivity(), WebViewClientListener {
         super.onRestoreInstanceState(savedInstanceState)
     }
 
+    override fun onDestroy() {
+        // Release native resources and detach the WebView so the Activity is not
+        // leaked through the JS-interface / AdFilter callbacks it holds.
+        webView.apply {
+            removeAllViews()
+            destroy()
+        }
+        super.onDestroy()
+    }
+
     override fun onPageStarted(url: String?, favicon: Bitmap?) {
         runOnUiThread {
             url?.let { viewModel.currentPageUrl.value = it }

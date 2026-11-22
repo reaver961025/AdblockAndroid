@@ -150,10 +150,13 @@ Java_io_github_edsuns_adblockclient_AdBlockClient_matches(JNIEnv *env, jobject /
     jclass match_result_class = env->FindClass("io/github/edsuns/adblockclient/MatchResult");
     jmethodID init_id = env->GetMethodID(match_result_class, "<init>",
                                          "(ZLjava/lang/String;Ljava/lang/String;)V");
+    // Guard nullptr: on the common non-blocked path both filters are null, and
+    // NewStringUTF(nullptr) can abort ART. Kotlin's String? accepts a null jstring.
+    jstring jMatchedRule = matchedRule ? env->NewStringUTF(matchedRule) : nullptr;
+    jstring jMatchedExceptionRule =
+        matchedExceptionRule ? env->NewStringUTF(matchedExceptionRule) : nullptr;
     jobject matchResult = env->NewObject(match_result_class, init_id,
-                                         shouldBlock,
-                                         env->NewStringUTF(matchedRule),
-                                         env->NewStringUTF(matchedExceptionRule));
+                                         shouldBlock, jMatchedRule, jMatchedExceptionRule);
 
     env->ReleaseStringUTFChars(url, urlChars);
     env->ReleaseStringUTFChars(firstPartyDomain, firstPartyDomainChars);

@@ -1,0 +1,46 @@
+# Centralized version catalog for the AdblockAndroid fork.
+# Referenced from the module build.gradle files as `libs.<alias>` / `libs.bundles.<alias>`.
+[versions]
+agp = "8.5.2"
+kotlin = "1.9.24"
+coreKtx = "1.13.1"
+appcompat = "1.7.0"
+constraintlayout = "2.1.4"
+activity = "1.9.2"
+fragment = "1.8.4"
+work = "2.9.1"
+material = "1.12.0"
+timber = "5.0.1"
+coroutines = "1.8.0"
+serializationJson = "1.6.3"
+junit = "4.13.2"
+androidxTestJunit = "1.2.1"
+espresso = "3.6.1"
+mezzanine = "1.2.1"
+httprequest = "0.2"
+smoothprogress = "1.0"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
+androidx-activity-ktx = { group = "androidx.activity", name = "activity-ktx", version.ref = "activity" }
+androidx-fragment-ktx = { group = "androidx.fragment", name = "fragment-ktx", version.ref = "fragment" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
+google-material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "timber" }
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serializationJson" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestJunit" }
+androidx-test-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso" }
+edsuns-httprequest = { group = "com.github.Edsuns", name = "HttpRequest", version.ref = "httprequest" }
+edsuns-mezzanine = { group = "com.github.Edsuns.Mezzanine", name = "mezzanine", version.ref = "mezzanine" }
+edsuns-mezzanine-compiler = { group = "com.github.Edsuns.Mezzanine", name = "mezzanine-compiler", version.ref = "mezzanine" }
+edsuns-smoothprogress = { group = "com.github.Edsuns", name = "SmoothProgressAnimator", version.ref = "smoothprogress" }
+
+[bundles]
+androidx-base = ["androidx-core-ktx", "androidx-appcompat"]
+test-base = ["junit"]
+androidtest-base = ["androidx-test-ext-junit", "androidx-test-espresso-core"]
