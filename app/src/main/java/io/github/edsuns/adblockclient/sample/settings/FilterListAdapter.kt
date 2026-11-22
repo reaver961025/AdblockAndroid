@@ -138,9 +138,10 @@ class FilterViewHolder(private val adapter: FilterListAdapter, itemView: View) :
 
     init {
         switch.setOnCheckedChangeListener { _, isChecked ->
-            // adapterPosition is deprecated; bindingAdapterPosition is the modern
-            // equivalent and is guarded against the unbound (NO_POSITION) case.
-            val pos = bindingAdapterPosition
+            // Guarded against the unbound (NO_POSITION) case. adapterPosition is
+            // deprecated but used because the transitively-resolved RecyclerView
+            // version predates bindingAdapterPosition.
+            val pos = adapterPosition
             if (pos != RecyclerView.NO_POSITION) {
                 adapter.viewModel.setFilterEnabled(adapter.data[pos].id, isChecked, false)
             }

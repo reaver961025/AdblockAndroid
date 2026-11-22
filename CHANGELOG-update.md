@@ -86,9 +86,11 @@ downloadable from the SDK manager). The four shipped ABIs
 ## Code audit
 
 A full read-only audit of the Kotlin source + the first-party JNI bridge
-(`adblockclient-lib.cpp`) was performed. **No build-breakers** were found under
-the target toolchain — the project compiles (with deprecation warnings). The
-following real issues were **fixed** in this pass:
+(`adblockclient-lib.cpp`) was performed. The source-level audit found **no
+compile errors**, but actually building the project locally surfaced several
+**configuration-level build-breakers** (AGP 8 `namespace`, a missing
+`kotlinOptions.jvmTarget`, a missing `android:exported`, an unresolved
+`R.attr` reference) which are fixed below alongside the source issues.
 
 - `app/.../App.kt` — `PendingIntent.getActivity(..., 0)` now passes
   `FLAG_IMMUTABLE` (hard crash on API 31+ without it; minSdk 23 guarantees the
@@ -105,13 +107,28 @@ following real issues were **fixed** in this pass:
   callbacks.
 - `app/.../URLUtilities.kt` — `Patterns.WEB_URL` (deprecated API 31) →
   `androidx.core.util.PatternsCompat.WEB_URL`.
-- `app/.../settings/FilterListAdapter.kt` — `adapterPosition` (deprecated) →
-  `bindingAdapterPosition`, guarded against `NO_POSITION`.
+- `app/.../settings/FilterListAdapter.kt` — the `setOnCheckedChangeListener`
+  now guards `adapterPosition != RecyclerView.NO_POSITION` before use. Kept
+  `adapterPosition` (deprecated) rather than `bindingAdapterPosition` because
+  the transitively-resolved RecyclerView version predates the latter.
 - `ad-filter/.../impl/CustomFilterImpl.kt` — `toByteArray()` now explicit
   `Charsets.UTF_8` (the JNI side expects UTF-8).
 - `adblock-client/.../adblockclient-lib.cpp` — guarded `NewStringUTF(nullptr)`
   in `matches()`; on the common non-blocked path both rule pointers are null and
   `NewStringUTF(nullptr)` can abort ART.
+
+**Configuration build-breakers found while compiling locally (all fixed):**
+- AGP 8 requires an explicit `namespace` in each module's `build.gradle` (it no
+  longer derives it from the manifest `package`); added to all three modules and
+  removed the now-deprecated `package` attribute from each `AndroidManifest.xml`.
+- `adblock-client/build.gradle` lacked `kotlinOptions { jvmTarget }`, so Kotlin
+  defaulted to the running JDK (21) while Java targeted 1.8 → "Inconsistent
+  JVM-target". Added `jvmTarget = 1.8` to match the other modules.
+- `app/AndroidManifest.xml` — `MainActivity` has an intent filter but no
+  `android:exported`, which targetSdk 34 (Android 12+) requires. Added
+  `android:exported="true"` (and `"false"` on `SettingsActivity`).
+- `app/.../MainActivity.kt` — `R.attr.actionOverflowMenuStyle` did not resolve
+  (it is a framework attr); corrected to `android.R.attr.actionOverflowMenuStyle`.
 
 **Deferred (identified, not fixed — require API/architectural changes that can't
 be safely verified without a device):**
@@ -164,18 +181,27 @@ App and library modules bumped from `versionCode 1` / `versionName "1.0"` to
 - Gradle wrapper 8.7 launches under JDK 21 (`./gradlew --version`).
 - Version catalog `libs.versions.toml` parses (Python `tomllib`) and every
   `libs.*` accessor used in the build files is defined (`scripts/verify_catalog.py`).
-- A source + JNI audit found **no build-breakers** under the target toolchain.
-- **A full build could NOT be run in the sandbox**: no Android SDK/NDK/CMake, and
-  Maven Central rate-limits (HTTP 429) the sandbox IP during AGP classpath
-  resolution. Compilation is instead verified in GitHub Actions (see CI section),
-  which runs on a runner with the SDK/NDK/CMake and no rate limit.
+- **The project builds green locally** in the sandbox after installing the Android
+  SDK (cmdline-tools, platform-34, build-tools 34.0.0), NDK r26d
+  (`26.3.11579264`) and CMake 3.22.1 under `/home/z/my-project/android-sdk`, and
+  pointing Gradle at an Aliyun mirror to work around Maven Central's per-IP 429
+  (the mirror is local-only and NOT committed):
+  - `:adblock-client:assembleRelease` → `adblock-client-release.aar` (360 KB,
+    includes `jni/arm64-v8a/libadblock-client.so`).
+  - `:ad-filter:assembleRelease` → `ad-filter-release.aar` (157 KB, `classes.jar`;
+    Mezzanine kapt processed all 6 JS assets).
+  - `:app:assembleDebug` → sample APK (arm64-v8a).
+  Only non-blocking deprecation warnings remain (`splits.density`, `onBackPressed`,
+  Java source/target 8 obsolete, non-incremental annotation processors).
+- The committed `build.gradle` keeps only `google()` / `mavenCentral()` / jitpack
+  (no mirror); GitHub Actions runners are not rate-limited, so CI builds clean.
 
 ## Remaining steps (to do)
 
-1. Push `update/modernize-toolchain`, trigger the workflow via `workflow_dispatch`
-   and iterate until the AAR build is green.
-2. Fast-forward `master` (fork only) to the green branch and tag `v2.0.0` — the
-   workflow then publishes the `.aar` files to a GitHub Release.
+1. Commit the config build-breaker fixes (namespace, jvmTarget, `android:exported`,
+   `android.R.attr`) on `master` and push.
+2. Tag `v2.0.0` on `master` — the workflow publishes the `.aar` files to a GitHub
+   Release (run after the local green build above).
 3. Address the deferred audit items (the two ANR risks in the core library and
    the `AdBlockClient` native-memory lifecycle) — these need device/emulator
    validation.
